@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class ExitIDBEvent(IEvent):
 	def __init__(self):

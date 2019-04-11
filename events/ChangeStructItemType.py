@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class ChangeSturctItemTypeEvent(IEvent):
 	def __init__(self, id_of_struct, offset, variable_type):

@@ -1,73 +1,60 @@
 import idaapi
-from events import *
+from all_events import *
 import idc
-from ida.idp import IDB_Hooks, IDP_Hooks
+from ida_idp import IDB_Hooks, IDP_Hooks
 from ida_kernwin import UI_Hooks
 
 PAUSE_HOOK = False
+def log(data, *args):
+	print("[IReal] " + data.format(args))
 
 class ClosingHook(idaapi.UI_Hooks):
 	def __init__(self):
 		idaapi.UI_Hooks.__init__(self)
 	def term(self):
-		pass
+		pass_to_manager(ExitIDBEvent())
 
 class LiveHookIDP(ida_idp.IDP_Hooks):
 	def ev_undefine(self, ea):
-		print "[Sync-hook]: Undefined value: {0}".format(ea)
-		idb_diff["names"][str(ea)] = None
+		pass_to_manager(UndefineDataEvent(ea))
 		return ida_idp.IDP_Hooks.ev_undefine(self, ea)
 
 class LiveHook(ida_idp.IDB_Hooks):
 	def renamed(self, ea, new_name, is_local_name):		
 		if not PAUSE_HOOK:
-			print "[Sync-hook]: Name changed: {0}  = {1} | {2}".format(hex(ea),new_name, is_local_name)
+			log("Name changed: {0}  = {1} | {2}".format(hex(ea),new_name, is_local_name))
 			flags_of_address = idc.GetFlags(ea)
 			if isFunc(flags_of_address):
-				if str(ea) in idb_diff["functions"]:
-					idb_diff["functions"][str(ea)]["function_name"] = new_name
-				else:
-					idb_diff["functions"][str(ea)] = {"function_name" : new_name}
+				pass_to_manager(ChangeFunctionNameEvent(ea, new_name))
 			elif flags_of_address != 0:
+				#need to find out if lablel or just global var 
 				if is_local_name:
-					idb_diff["names"][str(ea)] = new_name
-				else:
-					idb_diff["names"][str(ea)] = new_name
+					pass
 		return ida_idp.IDB_Hooks.renamed(self,ea,new_name,is_local_name)
 
 	def changing_cmt(self, ea, repeatable_cmt, newcmt):
-		res = ida_idp.IDB_Hooks.changing_cmt(self,ea,repeatable_cmt, newcmt)
 		if not PAUSE_HOOK:
-			print "[Sync-hook]: New comment: {0} {1}".format(hex(ea), newcmt)
-			if repeatable_cmt:
-
-				idb_diff["comments_repetable"][str(ea)] = newcmt
-			else:
-				idb_diff["comments_regular"][str(ea)] = newcmt
-		return res
+			log("New comment: {0} {1}".format(hex(ea), newcmt))
+			pass_to_manager(ChangeCommentEvent(ea, new_cmt, repeatable_cmt))
+		return ida_idp.IDB_Hooks.changing_cmt(self,ea,repeatable_cmt, newcmt)
 
 	def func_added(self,pfn):
+		if not PAUSE_HOOK:
+			pass_to_manager(NewFunctionEvent(int(pfn.start_ea), int(pfn.end_ea)))
 		return ida_idp.IDB_Hooks.func_added(self, pfn)
 
 	def set_func_start(self, pfn, new_start):
 		if not PAUSE_HOOK:
-			print "[Sync-hook] New start: {0}".format(new_start)
-			old_start = int(pfn.start_ea)
-			end = int(pfn.end_ea)
-			name = sark.Line(old_start).name
-			new_start = str(new_start)
-			if new_start not in idb_diff["functions"]:
-				idb_diff["functions"][new_start] = {"function_name" : name, "old_start": old_start}
+			log("New start: {0}".format(new_start))
+			name = get_func_name(new_start).name
+			pass_to_manager(ChangeFunctionStartEvent(name, new_start))
 		return ida_idp.IDB_Hooks.set_func_start(self, pfn, int(new_start))
 
 	def set_func_end(self, pfn, new_end):
 		if not PAUSE_HOOK:
-			print "[Sync-hook] New end: {0}".format(new_end)
-			function_address = str(pfn.start_ea)
-			if function_address in idb_diff["functions"]:
-				idb_diff["functions"][function_address]["endEA"] = new_end
-			else:
-				idb_diff["functions"][function_address] = {"endEA": new_end}
+			log("New end: {0}".format(new_end))
+			name = get_func_name(pfn.start_ea).name
+			pass_to_manager(ChnageFunctionEndEveent(name, new_end))
 		return ida_idp.IDB_Hooks.set_func_end(self, pfn, new_end)
 
 	def struc_created(self, struc_id):
@@ -78,30 +65,19 @@ class LiveHook(ida_idp.IDB_Hooks):
 		
 	def renaming_struc_member(self, sptr, mptr, newname):
 		if not PAUSE_HOOK:
-			offset_at_stack = str(mptr.get_soff())
-			frame_id = str(sptr.id)
-			if frame_id in idb_diff["frame_vars"]:
-				idb_diff["frame_vars"][frame_id][offset_at_stack] = newname
-			else:
-				idb_diff["frame_vars"][frame_id] = {offset_at_stack: newname}
+			pass_to_manager(ChangeStructItemEvent(sptr.id, mptr.get_soff(), new_name))
 		return ida_idp.IDB_Hooks.renaming_struc_member(self, sptr, mptr, newname)
 
 	def struc_member_deleted(self, sptr, member_id, offset):
-		frame_id = str(sptr.id)
-		if frame_id in idb_diff["frame_vars"]:
-			idb_diff["frame_vars"][frame_id][str(offset)] = None
-		else:
-			idb_diff["frame_vars"][frame_id] = {str(offset): None}
+		if PAUSE_HOOK:
+			pass_to_manager(DeleteStructVariableEvent(sptr.id, offset))
 		return ida_idp.IDB_Hooks.struc_member_deleted(self, sptr, member_id, offset)
 
 	def changing_range_cmt(self, kind, a, cmt, repeatable):
 		if not PAUSE_HOOK:
 			if kind == 1:
-				function_address = str(a.start_ea)
-				if function_address in idb_diff["functions"]:
-					idb_diff["functions"][function_address]["function_comment"] = cmt
-				else:
-					idb_diff["functions"][function_address] = {"function_comment": cmt}
+				function_address = a.start_ea
+				pass_to_manager(ChangeCommentEvent(function_address, cmt, "Function"))
 		return ida_idp.IDB_Hooks.changing_range_cmt(self, kind, a, cmt, repeatable)	
 
 	def enum_created(self, id):
@@ -115,23 +91,16 @@ class LiveHook(ida_idp.IDB_Hooks):
 
 	def extra_cmt_changed(self, ea, line_idx, cmt):
 		if not PAUSE_HOOK:
-			print "[Sync-hook] Extra cmt changed: {0} {1} {2}".format(ea,line_idx, cmt)
-			if not cmt:
-				idb_diff["comments_anterior"][str(ea)] = None
-			else:
-				if str(ea) in idb_diff["comments_anterior"]:
-					idb_diff["comments_anterior"][str(ea)] += '\n' + cmt
-				else:
-					idb_diff["comments_anterior"][str(ea)] = cmt
+			pass
 		return ida_idp.IDB_Hooks.extra_cmt_changed(self, ea, line_idx, cmt)
 
-def pass_to_manager(IEvent event):
-	pass
+def pass_to_manager(ev):
+	print("Pass to manager")
 
 class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 	flags = idaapi.PLUGIN_HIDE | PLUGIN_FIX
-	comment = "Push the xref, notes and functions names and addresses"
-	help = "Push the xref, notes and functions names and addresses"
+	comment = " "
+	help = " "
 	wanted_name = "Hooker"
 	wanted_hotkey = ""
 	def run(self, arg):
@@ -146,15 +115,15 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		PAUSE_HOOK = False
 
 	def attach_to_menu(self):
-		#idaapi.attach_action_to_menu("Edit/Plugins/Sync/Push database","sync:push_db", idaapi.SETMENU_APP)
+		pass
 
 	def register_actions(self):
-		#idaapi.register_action(action_push_database)
+		pass
 		
 
 	def init(self):
-		msg("[SyncIDA]: Init done\n")
-		msg("[SyncIDA]: Waiting for auto analysing\n")
+		msg("[IReal]: Init done\n")
+		msg("[IReal]: Waiting for auto analysing\n")
 		self.ready_to_run = self.run_init
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()

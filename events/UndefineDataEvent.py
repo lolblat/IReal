@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class UndefineDataEvent(IEvent):
 	def __init__(self, linear_address):

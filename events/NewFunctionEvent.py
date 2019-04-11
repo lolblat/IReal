@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class NewFunctionEvent(IEvent):
 	def __init__(self, linear_address_start, linear_address_end):

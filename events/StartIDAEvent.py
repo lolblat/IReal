@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class StartIDAEvent(IEvent):
 	def __init__(self):

@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class DeleteStructVariableEvent(IEvent):
 	def __init__(self, id_of_struct, offset):

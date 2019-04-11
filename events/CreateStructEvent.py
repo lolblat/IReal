@@ -1,4 +1,4 @@
-import IEvent
+from IEvent import IEvent
 
 class CreateStructEvent(IEvent):
 	def __init__(name_of_struct, id_of_struct):
