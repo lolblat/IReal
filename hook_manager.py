@@ -35,7 +35,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 	def changing_cmt(self, ea, repeatable_cmt, newcmt):
 		if not PAUSE_HOOK:
 			log("New comment: {0} {1}".format(hex(ea), newcmt))
-			pass_to_manager(ChangeCommentEvent(ea, new_cmt, repeatable_cmt))
+			pass_to_manager(ChangeCommentEvent(ea, newcmt, repeatable_cmt))
 		return ida_idp.IDB_Hooks.changing_cmt(self,ea,repeatable_cmt, newcmt)
 
 	def func_added(self,pfn):
@@ -126,11 +126,11 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		msg("[IReal]: Waiting for auto analysing\n")
 		self.ready_to_run = self.run_init
 		self.idb_hook = LiveHook()
-		self.ui_hook = ClosingHook()
-		self.idp_hook = LiveHookIDP()
+		#self.ui_hook = ClosingHook()
+		#self.idp_hook = LiveHookIDP()
 		self.idb_hook.hook()
-		self.ui_hook.hook()
-		self.idp_hook.hook()
+		#self.ui_hook.hook()
+		#self.idp_hook.hook()
 		self.hook()
 		return idaapi.PLUGIN_KEEP
 

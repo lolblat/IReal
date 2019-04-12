@@ -3,7 +3,7 @@ from events.ChangeEnumItemEvent import ChangeEnumItemEvent
 from events.ChangeEnumNameEvent import ChangeEnumNameEvent
 from events.ChangeFunctionEndEvent import ChangeFunctionEndEvent
 from events.ChangeFunctionHeaderEvent import ChangeFunctionHeaderEvent
-from events.ChangeFunctionNameEvent import ChangeFunctionNameEvent
+from events.ChangeFunctionNameEvent import ChangeFunctionNameEvent #HERE
 from events.ChangeFunctionStartEvent import ChangeFunctionStartEvent
 from events.ChangeGlobalVariableNameEvent import ChangeGlobalVariableNameEvent
 from events.ChangeLabelNameEvent import ChangeLabelNameEvent

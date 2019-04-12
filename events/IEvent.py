@@ -1,6 +1,6 @@
 import json
 
-class IEvent():
+class IEvent(object):
 	def __init__(self, event_id, name, data):
 		self.id = event_id
 		self.name = name
