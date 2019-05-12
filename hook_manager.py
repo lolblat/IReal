@@ -254,7 +254,9 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.make_data(self, ea, flags, tid, len)
 		
 	def auto_empty_finally(self):
+		global PAUSE_HOOK
 		log("auto finished")
+		PAUSE_HOOK = False
 		return 0
 def pass_to_manager(ev):
 	log("Pass to manager: " + str(ev))
@@ -278,11 +280,7 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		global PAUSE_HOOK
 		msg("[IReal]: Init done\n")
 		msg("[IReal]: Waiting for auto analysing\n")
-		if idc.GetIdbPath():
-			log("START")
-			PAUSE_HOOK = False
-		else:
-			PAUSE_HOOK = True
+		PAUSE_HOOK = True
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()
 		self.idp_hook = LiveHookIDP()
