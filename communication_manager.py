@@ -8,10 +8,11 @@ SECRECT_KEY = "RkK1EM4xHRUOfYBXvrw4"
 EVENT_QUEUE = Queue()
 
 def pulling(user_token):
+	#Pull from the server
 	pass
 
 def pass_to_ida():
-
+	#Pass to ida controller.
 	pass
 
 def parse_args():

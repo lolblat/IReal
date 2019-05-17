@@ -4,7 +4,7 @@ import jwt
 BASE_URL = "https://our-amazon-web.com/"
 LOGIN_PATH = "api/users/tokens"
 
-class MyForm(Form):
+class AuthForm(Form):
     def __init__(self):
         self.invert = False
         Form.__init__(self, r"""STARTITEM {id:iUserName}
@@ -33,5 +33,6 @@ Login form
             return 1
 
 def try_to_log_in(username,password):
-    return requests.post("{0}{1}".format(BASE_URL, LOGIN_PATH), data={"username":username, "password": password}).content
+    return "2"
+    #return requests.post("{0}{1}".format(BASE_URL, LOGIN_PATH), data={"username":username, "password": password}).content
     

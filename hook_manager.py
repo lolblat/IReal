@@ -8,6 +8,7 @@ from ida_kernwin import UI_Hooks, View_Hooks
 import ida_hexrays
 import ida_typeinf
 import ida_nalt
+from Auth import AuthForm
 PAUSE_HOOK = True
 last_ea = None
 def log(data):
@@ -280,6 +281,7 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		global PAUSE_HOOK
 		msg("[IReal]: Init done\n")
 		msg("[IReal]: Waiting for auto analysing\n")
+		AuthForm().Compile().Execute() # connect to the auth
 		PAUSE_HOOK = True
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()
