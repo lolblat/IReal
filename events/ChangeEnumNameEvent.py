@@ -1,5 +1,10 @@
 from IEvent import IEvent
-
+import ida_enum
 class ChangeEnumNameEvent(IEvent):
 	def __init__(self, id_of_enum, value):
-		super(ChangeEnumNameEvent, self).__init__(21, "Change enum name", {"id": id_of_enum, "value": value})
+		super(ChangeEnumNameEvent, self).__init__(20, "Change enum name", {"id": id_of_enum, "value": value})
+		self._id = id_of_enum
+		self._value = value
+
+	def implement(self):
+		ida_enum.set_enum_name(self._id, self._value)

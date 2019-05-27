@@ -84,7 +84,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 	def changing_cmt(self, ea, repeatable_cmt, newcmt):
 		if not PAUSE_HOOK:
 			log("New comment: {0} {1}".format(hex(ea), newcmt))
-			pass_to_manager(ChangeCommentEvent(ea, newcmt, repeatable_cmt))
+			pass_to_manager(ChangeCommentEvent(ea, newcmt, "repetable" if repeatable_cmt else "regular"))
 		return ida_idp.IDB_Hooks.changing_cmt(self,ea,repeatable_cmt, newcmt)
 
 	def func_added(self,pfn):
@@ -97,14 +97,14 @@ class LiveHook(ida_idp.IDB_Hooks):
 		if not PAUSE_HOOK:
 			log("New start: {0}".format(new_start))
 			name = get_func_name(new_start).name
-			pass_to_manager(ChangeFunctionStartEvent(name, new_start))
+			pass_to_manager(ChangeFunctionStartEvent(pfn.start_ea, new_start))
 		return ida_idp.IDB_Hooks.set_func_start(self, pfn, int(new_start))
 
 	def set_func_end(self, pfn, new_end):
 		if not PAUSE_HOOK:
 			log("New end: {0}".format(new_end))
 			name = get_func_name(pfn.start_ea).name
-			pass_to_manager(ChangeFunctionEndEveent(name, new_end))
+			pass_to_manager(ChangeFunctionEndEvent(name, new_end))
 		return ida_idp.IDB_Hooks.set_func_end(self, pfn, new_end)
 
 	def struc_created(self, struc_id):
@@ -168,7 +168,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 			elif flag & ida_bytes.FF_STRUCT:
 				data_type = ti.tid
 			if data_type:
-				pass_to_manager(ChangeStructItemEvent(sptr.id, mptr.get_soff(), data_type))
+				pass_to_manager(ChangeStructItemTypeEvent(sptr.id, mptr.get_soff(), data_type))
 		return 0
 
 	def changing_range_cmt(self, kind, a, cmt, repeatable):
@@ -187,7 +187,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 
 	def renaming_enum(self, eid, is_enum, newname):
 		if not PAUSE_HOOK:
-			log("Enum name changed")
+			log("Enum name changed {0} {1} {2}".format(eid, is_enum, newname))
 			pass_to_manager(ChangeEnumNameEvent(eid, newname))
 		return ida_idp.IDB_Hooks.renaming_enum(self, eid, is_enum, newname)
 
@@ -200,11 +200,11 @@ class LiveHook(ida_idp.IDB_Hooks):
 			pass_to_manager(CreateEnumItemEvent(id, enum_item_name , value))
 		return ida_idp.IDB_Hooks.enum_member_created(self, id, cid)
 
-	def changing_enum_bf(self, id, value):
+	def enum_member_deleted(self, id_of_struct, cid):
 		if not PAUSE_HOOK:
-			log("Enum member changed {0}".format(value))
-			pass_to_manager(ChangeEnumItemEvent(ida_enum.get_enum_member_enum(id), ida_enum.get_enum_member_name(id), value))
-		return ida_idp.IDB_Hooks.changing_enum_bf(self, id, value)
+			log("Enum member deleted {0} {1}".format(id_of_struct, cid))
+			pass_to_manager(DeleteEnumMemberEvent(id_of_struct , cid))
+		return ida_idp.IDB_Hooks.enum_member_deleted(self, id_of_struct, cid)
 
 	def enum_deleted(self, id):
 		if not PAUSE_HOOK:
@@ -230,13 +230,12 @@ class LiveHook(ida_idp.IDB_Hooks):
 				ida_nalt.get_tinfo(ea, tinfo)
 				pass_to_manager(ChangeFunctionHeaderEvent(ea, str(tinfo)))
 			else:
+				pass_to_manager(ChangeTypeEvent(ea, type))
 				if flags_of_address & ida_bytes.FF_STRUCT:
 					log(str(dir(type)))
-				pass
 		return ida_idp.IDB_Hooks.ti_changed(self, ea, type, fnames)
 
 	def make_data(self, ea, flags, tid, len):
-		#TODO figure out flags FF_*
 		if not PAUSE_HOOK:
 			log("Make data: {0} {1} {2} {3}".format(ea, flags, tid, len))
 			data_type = None
@@ -259,6 +258,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 		log("auto finished")
 		PAUSE_HOOK = False
 		return 0
+	
 def pass_to_manager(ev):
 	log("Pass to manager: " + str(ev))
 
@@ -281,8 +281,11 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		global PAUSE_HOOK
 		msg("[IReal]: Init done\n")
 		msg("[IReal]: Waiting for auto analysing\n")
-		AuthForm().Compile().Execute() # connect to the auth
-		PAUSE_HOOK = True
+		#AuthForm().Compile().Execute() # connect to the auth
+		if idc.GetIdbPath():
+			PAUSE_HOOK = False
+		else:
+			PAUSE_HOOK = True
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()
 		self.idp_hook = LiveHookIDP()
@@ -295,13 +298,12 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		return idaapi.PLUGIN_KEEP
 
 	def term(self):
-		pass
-		#if self.idb_hook:
-		#	self.idb_hook.unhook()
-		#if self.ui_hook:
-		#	self.ui_hook.unhook()
-		#if self.idb_hook:
-		#	self.idp_hook.unhook()
+		if self.idb_hook:
+			self.idb_hook.unhook()
+		if self.ui_hook:
+			self.ui_hook.unhook()
+		if self.idb_hook:
+			self.idp_hook.unhook()
 		
 		
 

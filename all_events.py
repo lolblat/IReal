@@ -8,6 +8,7 @@ from events.ChangeFunctionStartEvent import ChangeFunctionStartEvent
 from events.ChangeGlobalVariableNameEvent import ChangeGlobalVariableNameEvent
 from events.ChangeLabelNameEvent import ChangeLabelNameEvent
 from events.ChangeStructItemEvent import ChangeStructItemEvent
+from events.ChangeStructItemTypeEvent import ChangeStructItemTypeEvent
 from events.ChangeStructNameEvent import ChangeStructNameEvent
 from events.ChangeTypeEvent import ChangeTypeEvent
 from events.CreateEnumEvent import CreateEnumEvent
@@ -21,4 +22,5 @@ from events.ExitIDBEvent import ExitIDBEvent
 from events.IDACursorEvent import IDACursorEvent
 from events.NewFunctionEvent import NewFunctionEvent
 from events.StartIDAEvent import StartIDAEvent
+from events.DeleteEnumMemberEvent import DeleteEnumMemberEvent
 from events.UndefineDataEvent import UndefineDataEvent
