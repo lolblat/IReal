@@ -1,6 +1,6 @@
 from IEvent import IEvent
-
-class ChangeSturctItemTypeEvent(IEvent):
+import idc
+class ChangeStructItemTypeEvent(IEvent):
 	def __init__(self, id_of_struct, offset, variable_type):
 		super(ChangeSturctItemTypeEvent, self).__init__(13, "Change struct item type", {"id": id_of_struct, "offset": offset, "variable-type": variable_type})
 		self._id = id_of_struct

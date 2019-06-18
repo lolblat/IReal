@@ -1,4 +1,7 @@
+import constants
 import idaapi
+import struct
+import subprocess
 import ida_enum
 from all_events import *
 import idc
@@ -8,8 +11,9 @@ from ida_kernwin import UI_Hooks, View_Hooks
 import ida_hexrays
 import ida_typeinf
 import ida_nalt
+import ida_auto
 from Auth import AuthForm
-PAUSE_HOOK = True
+import shared
 last_ea = None
 def log(data):
 	print("[IReal] " + data)
@@ -24,8 +28,7 @@ class ClosingHook(idaapi.UI_Hooks):
 		idaapi.UI_Hooks.__init__(self)
 
 	def term(self):
-		global PAUSE_HOOK
-		PAUSE_HOOK = True
+		shared.PAUSE_HOOK = True
 		log("Exit IDB")
 		pass_to_manager(ExitIDBEvent())
 		return idaapi.UI_Hooks.term(self)
@@ -44,35 +47,35 @@ class ClosingHook(idaapi.UI_Hooks):
 
 class LiveHookIDP(ida_idp.IDP_Hooks):
 	def ev_undefine(self, ea):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			pass_to_manager(UndefineDataEvent(ea))
 		return ida_idp.IDP_Hooks.ev_undefine(self, ea)
 
 	def	ev_newfile(self, fname):
-		global PAUSE_HOOK
+		
 		log("START")
 		pass_to_manager(StartIDAEvent())
-		PAUSE_HOOK = False
+		shared.PAUSE_HOOK = not ida_auto.auto_is_ok()
 		return ida_idp.IDP_Hooks.ev_newfile(self, fname)
 
 	def ev_oldfile(self, fname):
-		global PAUSE_HOOK
+		
 		log("START")
 		pass_to_manager(StartIDAEvent())
-		PAUSE_HOOK = False
+		shared.PAUSE_HOOK = not ida_auto.auto_is_ok()
 		return ida_idp.IDP_Hooks.ev_oldfile(self, fname)
 
 class LiveHook(ida_idp.IDB_Hooks):
 	def closebase(self):
-		global PAUSE_HOOK
 		log("Exit IDB")
 		pass_to_manager(ExitIDBEvent())
-		PAUSE_HOOK = True
+		shared.PAUSE_HOOK = True
+		
 	def renamed(self, ea, new_name, is_local_name):		
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Name changed: {0}  = {1} | {2}".format(hex(ea),new_name, is_local_name))
 			flags_of_address = idc.GetFlags(ea)
-			if isFunc(flags_of_address):
+			if idaapi.isFunc(flags_of_address):
 				pass_to_manager(ChangeFunctionNameEvent(ea, new_name))
 			elif flags_of_address != 0:
 				if is_local_name:
@@ -82,45 +85,45 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.renamed(self,ea,new_name,is_local_name)
 
 	def changing_cmt(self, ea, repeatable_cmt, newcmt):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("New comment: {0} {1}".format(hex(ea), newcmt))
 			pass_to_manager(ChangeCommentEvent(ea, newcmt, "repetable" if repeatable_cmt else "regular"))
 		return ida_idp.IDB_Hooks.changing_cmt(self,ea,repeatable_cmt, newcmt)
 
 	def func_added(self,pfn):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("New function")
 			pass_to_manager(NewFunctionEvent(int(pfn.start_ea), int(pfn.end_ea)))
 		return ida_idp.IDB_Hooks.func_added(self, pfn)
 
 	def set_func_start(self, pfn, new_start):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("New start: {0}".format(new_start))
 			name = get_func_name(new_start).name
 			pass_to_manager(ChangeFunctionStartEvent(pfn.start_ea, new_start))
 		return ida_idp.IDB_Hooks.set_func_start(self, pfn, int(new_start))
 
 	def set_func_end(self, pfn, new_end):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("New end: {0}".format(new_end))
 			name = get_func_name(pfn.start_ea).name
 			pass_to_manager(ChangeFunctionEndEvent(name, new_end))
 		return ida_idp.IDB_Hooks.set_func_end(self, pfn, new_end)
 
 	def struc_created(self, struc_id):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("New struct")
 			pass_to_manager(CreateStructEvent(ida_struct.get_struc_name(struc_id), struc_id))
 		return ida_idp.IDB_Hooks.struc_created(self, struc_id)
 
 	def renaming_struc(self, sid, oldname, newname):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Rename struct")
 			pass_to_manager(ChangeStructNameEvent(sid, newname))
 		return ida_idp.IDB_Hooks.renaming_struc(self, sid, oldname, newname)
 	
 	def struc_member_created(self, sptr, mptr):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			tinfo = ida_typeinf.tinfo_t()
 			ida_hexrays.get_member_type(mptr, tinfo)
 			member_type = "unkown"
@@ -138,23 +141,25 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.struc_member_created(self, sptr, mptr)
 		
 	def renaming_struc_member(self, sptr, mptr, newname):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Rename struct member")
 			pass_to_manager(ChangeStructItemEvent(sptr.id, mptr.get_soff(), newname))
 		return ida_idp.IDB_Hooks.renaming_struc_member(self, sptr, mptr, newname)
 
 	def struc_member_deleted(self, sptr, member_id, offset):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Remove struct memeber")
 			pass_to_manager(DeleteStructVariableEvent(sptr.id, offset))
 		return ida_idp.IDB_Hooks.struc_member_deleted(self, sptr, member_id, offset)
+		
 	def struc_deleted(self, struc_id):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Remove struct")
 			pass_to_manager(DeleteStructEvent(struc_id))
 		return 0
+
 	def changing_struc_member(self, sptr, mptr, flag, ti, nbytes):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Changing struc member: {0} {1} {2} {3} {4}".format(sptr, mptr, flag, ti, nbytes))
 			data_type = None
 			if flag & ida_bytes.FF_BYTE:
@@ -172,27 +177,27 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return 0
 
 	def changing_range_cmt(self, kind, a, cmt, repeatable):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			if kind == 1:
-				log("Change range comment {0} {1} {2} {3}".format(kind, ea, cmt, repeatable))
+				log("Change range comment {0} {1} {2} {3}".format(kind, a.start_ea, cmt, repeatable))
 				function_address = a.start_ea
 				pass_to_manager(ChangeCommentEvent(function_address, cmt, "Function"))
 		return ida_idp.IDB_Hooks.changing_range_cmt(self, kind, a, cmt, repeatable)	
 
 	def enum_created(self, id):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Enum created: {0}".format(id))
 			pass_to_manager(CreateEnumEvent(ida_enum.get_enum_name(id), id))
 		return ida_idp.IDB_Hooks.enum_created(self, id)
 
 	def renaming_enum(self, eid, is_enum, newname):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Enum name changed {0} {1} {2}".format(eid, is_enum, newname))
 			pass_to_manager(ChangeEnumNameEvent(eid, newname))
 		return ida_idp.IDB_Hooks.renaming_enum(self, eid, is_enum, newname)
 
 	def enum_member_created(self, id, cid):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Enum memeber created: {0} {1}".format(id, cid))
 			enum_item_name = ida_enum.get_enum_member_name(cid)
 			value = ida_enum.get_enum_member_value(cid)
@@ -201,19 +206,19 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.enum_member_created(self, id, cid)
 
 	def enum_member_deleted(self, id_of_struct, cid):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Enum member deleted {0} {1}".format(id_of_struct, cid))
 			pass_to_manager(DeleteEnumMemberEvent(id_of_struct , cid))
 		return ida_idp.IDB_Hooks.enum_member_deleted(self, id_of_struct, cid)
 
 	def enum_deleted(self, id):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Enum deleted")
 			pass_to_manager(DeleteEnumEvent(id))
 		return ida_idp.IDB_Hooks.enum_deleted(self, id)		
 
 	def extra_cmt_changed(self, ea, line_idx, cmt):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("{0} {1}".format(line_idx, cmt))
 			if line_idx / 1000 == 1:
 				pass_to_manager(ChangeCommentEvent(ea, "{0}:{1}".format(line_idx, cmt), "anterior"))
@@ -222,7 +227,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.extra_cmt_changed(self, ea, line_idx, cmt)
 
 	def ti_changed(self, ea, type, fnames):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Ti changed: {0} {1} {2}".format(str(ea), str(type), str(fnames)))
 			flags_of_address = idc.GetFlags(ea)
 			if isFunc(flags_of_address):
@@ -236,7 +241,7 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.ti_changed(self, ea, type, fnames)
 
 	def make_data(self, ea, flags, tid, len):
-		if not PAUSE_HOOK:
+		if not shared.PAUSE_HOOK:
 			log("Make data: {0} {1} {2} {3}".format(ea, flags, tid, len))
 			data_type = None
 			if flags & ida_bytes.FF_BYTE:
@@ -254,13 +259,18 @@ class LiveHook(ida_idp.IDB_Hooks):
 		return ida_idp.IDB_Hooks.make_data(self, ea, flags, tid, len)
 		
 	def auto_empty_finally(self):
-		global PAUSE_HOOK
+		
 		log("auto finished")
-		PAUSE_HOOK = False
+		shared.PAUSE_HOOK = False
 		return 0
 	
 def pass_to_manager(ev):
 	log("Pass to manager: " + str(ev))
+	try:
+		communication_manager_window_handler = constants.get_window_handler_by_id(shared.COMMUNICATION_MANAGER_WINDOW_ID)
+		constants.send_data_to_window(communication_manager_window_handler, constants.SEND_DATA_TO_SERVER, ev.encode_to_json())
+	except Exception as e:
+		pass
 
 class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 	flags = idaapi.PLUGIN_HIDE | idaapi.PLUGIN_FIX
@@ -278,14 +288,15 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		pass
 		
 	def init(self):
-		global PAUSE_HOOK
 		msg("[IReal]: Init done\n")
 		msg("[IReal]: Waiting for auto analysing\n")
-		#AuthForm().Compile().Execute() # connect to the auth
-		if idc.GetIdbPath():
-			PAUSE_HOOK = False
+		shared.COMMUNICATION_MANAGER_WINDOW_ID = struct.unpack(">I", os.urandom(4))[0]
+		if shared.INTEGRATOR_WINDOW_ID != -1: #TODO: start the communication manaager
+			shared.start_communication_manager()
+		if idc.GetIdbPath() and ida_auto.auto_is_ok():
+			shared.PAUSE_HOOK = False
 		else:
-			PAUSE_HOOK = True
+			shared.PAUSE_HOOK = True
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()
 		self.idp_hook = LiveHookIDP()
@@ -298,6 +309,12 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		return idaapi.PLUGIN_KEEP
 
 	def term(self):
+		try:
+			communication_manager_window_handler = constants.get_window_handler_by_id(shared.COMMUNICATION_MANAGER_WINDOW_ID)
+			constants.send_data_to_window(communication_manager_window_handler, constants.KILL_COMMUNICATION_MANAGER_MESSAGE_ID, None)
+		except Exception as e:
+			pass
+		
 		if self.idb_hook:
 			self.idb_hook.unhook()
 		if self.ui_hook:

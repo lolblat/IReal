@@ -2,9 +2,11 @@ from IEvent import IEvent
 import idaapi
 import idc
 import ida_lines
+from constants import *
+
 class ChangeCommentEvent(IEvent):
 	def __init__(self, linear_address, value, comment_type):
-		super(ChangeCommentEvent, self).__init__(4, "Comments", {"linear-address": linear_address, "value": value, "comment-type": comment_type})
+		super(ChangeCommentEvent, self).__init__(SET_COMMENT_ID, "Comments", {"linear-address": linear_address, "value": value, "comment-type": comment_type})
 		self._linear_address = linear_address
 		self._comment_type = comment_type
 		self._value = value

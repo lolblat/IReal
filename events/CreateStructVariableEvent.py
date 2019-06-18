@@ -1,8 +1,9 @@
 from IEvent import IEvent
 import ida_struct
+from constants import *
 class CreateStructVariableEvent(IEvent):
 	def __init__(self, id_of_struct, offset, variable_type, value):
-		super(CreateStructVariableEvent,self).__init__(12, "Create struct variable", {"id": id_of_struct, "offset": offset, "variable-type": variable_type, "value": value})	
+		super(CreateStructVariableEvent,self).__init__(CREATE_STRUCT_VARIABLE_ID, "Create struct variable", {"id": id_of_struct, "offset": offset, "variable-type": variable_type, "value": value})	
 		self._id = id_of_struct
 		self._offset = offset
 		self._variable_type = variable_type

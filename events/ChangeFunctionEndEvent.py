@@ -1,8 +1,9 @@
 from IEvent import IEvent
 import ida_funcs
+from constants import *
 class ChangeFunctionEndEvent(IEvent):
 	def __init__(self, ea, value):
-		super(ChangeFunctionEndEvent, self).__init__(10, "Change function end", {"linear-address": ea, "value": value})
+		super(ChangeFunctionEndEvent, self).__init__(CHANGE_FUNCTION_END_ID, "Change function end", {"linear-address": ea, "value": value})
 		self._ea = ea
 		self._new_end = value
 	

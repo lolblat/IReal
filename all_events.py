@@ -1,5 +1,4 @@
 from events.ChangeCommentEvent import ChangeCommentEvent
-from events.ChangeEnumItemEvent import ChangeEnumItemEvent
 from events.ChangeEnumNameEvent import ChangeEnumNameEvent
 from events.ChangeFunctionEndEvent import ChangeFunctionEndEvent
 from events.ChangeFunctionHeaderEvent import ChangeFunctionHeaderEvent
