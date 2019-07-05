@@ -17,7 +17,7 @@ class IEvent(object):
 		self.data_ = data
 
 	def encode_to_json(self):
-		return json.dumps({"id": self.id_,
+		return json.dumps({"event-id": self.id_,
 				"name": self.name_,
 				"data": self.data_})
 

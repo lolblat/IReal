@@ -1,4 +1,5 @@
 #import jwt
+import base64
 import win32con
 import win32api
 import win32gui
@@ -9,10 +10,13 @@ import requests
 from threading import Thread, Timer
 from constants import * 
 
-SECRECT_KEY = "RkK1EM4xHRUOfYBXvrw4"
+SECRECT_KEY = ""
+TIMER_ARRAY = []
 THREAD_ARRAY = []
 ID_OF_INSTANCE = -1
 WINDOW_HANDLER = -1
+USERNAME_ID = -1
+USERNAME = ""
 PROJECT_ID = -1
 
 def create_hidden_window():
@@ -41,30 +45,84 @@ def remove_key_from_reg():
 	if key:
 		win32api.RegDeleteValue(key, str(ID_OF_INSTANCE))
 
+def decode_data(lParam):
+	copy_data = ctypes.cast(lParam, PCOPYDATASTRUCT)
+	data_size = copy_data.contents.cbData
+	data_pointer = copy_data.contents.lpData
+	data = ctypes.string_at(data_pointer, data_size)
+	print data
+	return data.replace("\x00","")
+
 def message_handler(window_handler, msg, wParam, lParam): 
+	global PROJECT_ID, USERNAME, USERNAME_ID, SECRECT_KEY
 	print wParam
-	if wParam == SEND_DATA_TO_SERVER: #TODO send to server
-		copy_data = ctypes.cast(lParam, PCOPYDATASTRUCT)
-		data_size = copy_data.contents.cbData
-		data_pointer = copy_data.contents.lpData
-		print ctypes.string_at(data_pointer, data_size)
+	if wParam == SEND_DATA_TO_SERVER:
+		Thread(target=send_data_to_server, args=(decode_data(lParam), )).start()
+	elif wParam == CHANGE_PROJECT_ID:
+		data = json.loads(decode_data(lParam))
+		PROJECT_ID = data["project-id"]
+	elif wParam == CHANGE_USER:
+		data = json.loads(decode_data(lParam))
+		USERNAME_ID = data["id"]
+		USERNAME = data["username"]
+		SECRECT_KEY = data["token"]
 	elif wParam == KILL_COMMUNICATION_MANAGER_MESSAGE_ID:
 		kill()
 
-def pull_from_server(user_token, project_id, integrator_window_key):
-	params = {"user-token": user_token, "last-update": 0}
-	#req = requests.get("{0}{1}".format(BASE_URL, GET_PROJECT_CHANGES_PATH.format(project_id)), params=params, timeout=2)
-	#data = req.content
-	#try:
+def send_data_to_server(data):
+	if PROJECT_ID == -1 or SECRECT_KEY == "":
+		return -1
+	data_to_send_json = json.loads(data)
+	data_to_send_json["project-id"] = PROJECT_ID
+	request_data = {}
+	request_data["push-data"] = data_to_send_json
+	headers = {"Authorization" : "Bearer {0}".format(base64.b64encode(SECRECT_KEY))}
+	if data_to_send_json["id"] == START_IDA_ID:
+		pass
+		#requests.post("{0}{1}".format(BASE_URL, START_SESSION.format(PROJECT_ID)), headers=headers timeout=5)
+	elif data_to_send_json["id"] == EXIT_FROM_IDA_ID:
+		pass
+		#requests.post("{0}{1}".format(BASE_URL, END_SESSION.format(PROJECT_ID)), headers=headers timeout=5)
+	#req = requests.post("{0}{1}".format(BASE_URL, PUSH_DATA_TO_PROJECT), data=data, headers=headers timeout=5)
+
+def get_last_update_time_from_config():
+	with open(PROJECT_DATA_FILE, 'r') as f:
+		data = json.loads(f.read())
+		return data[PROJECT_ID]["last-update"]
+
+def update_the_config_file(current_time):
+	with open(PROJECT_DATA_FILE, 'r+') as f:
+		data = json.loads(f.read())
+		data[PROJECT_ID]["last-update"] = current_time
+		f.write(json.dumps(data))
+
+def pull_from_server(integrator_window_key):
+	if PROJECT_ID == -1 or SECRECT_KEY == "":
+		return -1
+	params = {"project-id": PROJECT_ID, "last-update": get_last_update_time_from_config()}
+	headers = {"Authorization" : "Bearer {0}".format(base64.b64encode(SECRECT_KEY))}
+	try:
+		req = requests.get("{0}{1}".format(BASE_URL, GET_PROJECT_CHANGES_PATH.format(project_id)), params=params, headers = headers, timeout=2)
+	except Exception as e:
+		return -1	
+#	data = req.content
+#	try:
 #		data_parsed = json.loads(data)	
 #	except ValueError:
 #		return -1
-	
+#	update_the_config_file(data_parsed["current-time"])
 #	new_symbols = data_parsed["symbols"]
 #	window_handler_of_integrator = get_window_handler_by_id(integrator_window_key)
 #	for symbol in new_symbols:
 #		send_data_to_window(window_handler_of_integrator, SEND_DATA_TO_IDA, json.dumps(symbol))
 		
+def remove_done_timers():
+	global TIMER_ARRAY
+	tmp_array = []
+	for t in TIMER_ARRAY:
+		if t.isAlive():
+			tmp_array.append(t)
+	TIMER_ARRAY = tmp_array
 
 def remove_done_threads():
 	global THREAD_ARRAY
@@ -74,51 +132,53 @@ def remove_done_threads():
 			tmp_array.append(t)
 	THREAD_ARRAY = tmp_array
 
-def pulling(user_token, project_id, integrator_window_key):
-	global THREAD_ARRAY
-	def call_to_pull(user_token, project_id, integrator_window_key):
-		pulling(user_token, project_id, integrator_window_key)
-		pull_from_server(user_token, project_id, integrator_window_key)
-	timer_thread = Timer(3, call_to_pull, args=(user_token, project_id, integrator_window_key,  ))
+def pulling(integrator_window_key):
+	global TIMER_ARRAY
+	def call_to_pull(integrator_window_key):
+		pulling(integrator_window_key)
+		pull_from_server(integrator_window_key)
+	timer_thread = Timer(PULLING_TIME, call_to_pull, args=(integrator_window_key,  ))
 	timer_thread.start()
-	remove_done_threads()
-	THREAD_ARRAY.append(timer_thread)
+	remove_done_timers()
+	TIMER_ARRAY.append(timer_thread)
 
 def keep_alive_op():
-	global THREAD_ARRAY
+	global TIMER_ARRAY
 	def keep_alive():
 		keep_alive_op()
-	keep_alive_thread = Timer(0.01, keep_alive)
+	keep_alive_thread = Timer(KEEP_ALIVE_TIME, keep_alive)
 	keep_alive_thread.start()
+	remove_done_timers()
 	remove_done_threads()
-	THREAD_ARRAY.append(keep_alive_thread)
+	TIMER_ARRAY.append(keep_alive_thread)
 
 def parse_args():
 	parser = argparse.ArgumentParser(description="Puller for the IDA Plugin IReal")
-	parser.add_argument("token", type=str)
-	parser.add_argument("project_id", type=str)
 	parser.add_argument("integrator_window_key", type=str)
 	parser.add_argument("communication_manager_id", type=str)
 	args  = parser.parse_args()
-	return (args.token, args.project_id, args.integrator_window_key, args.communication_manager_id)
+	return (args.integrator_window_key, args.communication_manager_id)
 
-def main(user_token, project_id, integrator_window_key, communication_manager_id):
-	global THREAD_ARRAY, WINDOW_HANDLER, ID_OF_INSTANCE, SECRECT_KEY, PROJECT_ID
+def main(integrator_window_key, communication_manager_id):
+	global TIMER_ARRAY, WINDOW_HANDLER, ID_OF_INSTANCE, SECRECT_KEY, PROJECT_ID
 	ID_OF_INSTANCE = communication_manager_id
 	WINDOW_HANDLER = create_hidden_window()
-	SECRECT_KEY = user_token
-	PROJECT_ID = project_id
 	insert_to_registery(WINDOW_HANDLER)
-	pulling(user_token, project_id, integrator_window_key)
+	pulling(integrator_window_key)
 	keep_alive_op()
 	win32gui.PumpMessages()
 
 def kill():
-	remove_key_from_reg()
-	for thread in THREAD_ARRAY:
-		thread.cancel()
+	try:
+		remove_key_from_reg()
+		for thread in TIMER_ARRAY:
+			thread.cancel()
+		for thread in THREAD_ARRAY:
+			thread.join()
+	except Exception as e:
+		print str(e)
 	exit(0)
 
 if __name__ == "__main__":
-	user_token , project_id, integrator_window_key, communication_manager_id = parse_args()
-	main(user_token, project_id, integrator_window_key, communication_manager_id)
+	integrator_window_key, communication_manager_id = parse_args()
+	main(integrator_window_key, communication_manager_id)

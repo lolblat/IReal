@@ -7,13 +7,21 @@ import ctypes
 import ctypes.wintypes
 import pywintypes
 import sys
+import json
 
-BASE_URL = "https://our-amazon-web.com/"
-LOGIN_PATH = "api/users/tokens"
+BASE_URL = "http://192.168.14.7:3000/"
+LOGIN_PATH = "api/users/token"
 GET_PROJECT_CHANGES_PATH = "api/projects/{0}/changes"
 PUSH_DATA_TO_PROJECT  = "api/projects/{0}/push"
-APPDATA_FOLDER = os.getenv("APPDATA")
+LIST_USER_PROJECT = "/api/users/{0}/projects"
+START_SESSION = "/api/projects/{0}/session/start"
+END_SESSION = "/api/projects/{0}/session/end"
+PROJECT_DATA_FILE = "{0}\\IDAHub\\projects.dat".format(os.getenv("APPDATA"))
 SUBMODULE_KEY = "Software\\Hex-Rays\\IDA\\IPC\\Handler"
+SERVER_PUBLIC_KEY_PATH = "{0}\\IDAHub\\key.pub".format(os.getenv("APPDATA"))
+SERVER_PUBLIC_KEY = ""
+with open(SERVER_PUBLIC_KEY_PATH, "r") as f:
+	SERVER_PUBLIC_KEY = f.read()
 
 context64bit = sys.maxsize > 2**32
 if context64bit:
@@ -44,10 +52,27 @@ def send_data_to_window(window_handler, message_type, data):
 		cds = '1'
 	win32api.SendMessage(int(window_handler), win32con.WM_COPYDATA, int(message_type), cds)
 
-KILL_COMMUNICATION_MANAGER_MESSAGE_ID = 1338
+
+## Create path for the config file
+def create_config_file():
+	if not os.path.exists(PROJECT_DATA_FILE):
+		try:
+			os.makedirs(os.path.dirname(PROJECT_DATA_FILE))
+		except OSError as err:
+			pass
+		with open(PROJECT_DATA_FILE, 'w') as f:
+			f.write(json.dumps({}))
+	
+## Messages id
 SEND_DATA_TO_IDA  = 1337
+KILL_COMMUNICATION_MANAGER_MESSAGE_ID = 1338
 SEND_DATA_TO_SERVER = 1339
 
+#Data: {"project-id": <project-id>}
+CHANGE_PROJECT_ID = 1400
+
+#Data: {"username": <username>, "id": <userid>, "token": <token>}
+CHANGE_USER = 1401
 
 ## Events id.
 
@@ -77,3 +102,8 @@ EXIT_FROM_IDA_ID = 23
 START_IDA_ID = 24
 CHANGE_STRUCT_MEMBER_NAME_ID = 25
 DELETE_ENUM_MEMBER_ID = 26
+
+
+## Settings
+PULLING_TIME = 1
+KEEP_ALIVE_TIME = 0.01

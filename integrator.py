@@ -9,6 +9,7 @@ import struct
 import constants
 import shared
 from all_events import *
+import time
 
 def log(data):
 	print("[Integrator] " + data)
@@ -96,9 +97,6 @@ def create_event_from_dict(json_dict):
 	elif event_id == constants.DELETE_ENUM_MEMBER_ID:
 		return DeleteEnumMemberEvent(event_data["id"], event_data["value"])
 
-def integrate_to_ida(event_dict):
-	pass
-
 class integrator(idaapi.UI_Hooks, idaapi.plugin_t):
 	flags = idaapi.PLUGIN_HIDE | idaapi.PLUGIN_FIX
 	comment = " "
@@ -114,12 +112,18 @@ class integrator(idaapi.UI_Hooks, idaapi.plugin_t):
 		self._id = insert_to_registery(self._window_handler)
 		log("Created window")
 		shared.INTEGRATOR_WINDOW_ID = self._id
-		if shared.COMMUNICATION_MANAGER_WINDOW_ID != -1: #TODO open the communication manager
-			shared.start_communication_manager()
+		shared.COMMUNICATION_MANAGER_WINDOW_ID = struct.unpack(">I", os.urandom(4))[0]
+		shared.start_communication_manager()
+		time.sleep(1)
+		shared.IS_COMMUNICATION_MANAGER_STARTED = True
+		if shared.USERID != -1: #started.
+			communication_manager_window_handler = constants.get_window_handler_by_id(shared.COMMUNICATION_MANAGER_WINDOW_ID)
+			constants.send_data_to_window(communication_manager_window_handler, constants.CHANGE_PROJECT_ID, json.dumps({"project-id": shared.PROJECT_ID}))
+			constants.send_data_to_window(communication_manager_window_handler, constants.CHANGE_USER, json.dumps({"username":shared.USERNAME, "id": shared.USERID, "token": shared.USER_TOKEN}))
+
 		return idaapi.PLUGIN_KEEP
 
 	def term(self):
-		#win32gui.DestroyWindow(self._window_handler)
 		remove_key_from_reg(self._id)
 		self._id = 0
 		

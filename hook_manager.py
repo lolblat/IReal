@@ -1,4 +1,5 @@
 import constants
+import time
 import idaapi
 import struct
 import subprocess
@@ -12,7 +13,6 @@ import ida_hexrays
 import ida_typeinf
 import ida_nalt
 import ida_auto
-from Auth import AuthForm
 import shared
 last_ea = None
 def log(data):
@@ -33,17 +33,17 @@ class ClosingHook(idaapi.UI_Hooks):
 		pass_to_manager(ExitIDBEvent())
 		return idaapi.UI_Hooks.term(self)
 
-	def postprocess_action(self):
-		global last_ea
-		address = idc.here()
-		if address != 0xffffffff and address != 0xffffffffffffffff:
-			if last_ea:
-				if last_ea != address:
-					pass_to_manager(IDACursorEvent(address))
-					last_ea = address
-			else:
-				last_ea = address
-				pass_to_manager(IDACursorEvent(address))
+	#def postprocess_action(self):
+	#	global last_ea
+	#	address = idc.here()
+	#	if address != 0xffffffff and address != 0xffffffffffffffff:
+	#		if last_ea:
+	#			if last_ea != address:
+	#				pass_to_manager(IDACursorEvent(address))
+	#				last_ea = address
+	#		else:
+	#			last_ea = address
+	#			pass_to_manager(IDACursorEvent(address))
 
 class LiveHookIDP(ida_idp.IDP_Hooks):
 	def ev_undefine(self, ea):
@@ -51,15 +51,13 @@ class LiveHookIDP(ida_idp.IDP_Hooks):
 			pass_to_manager(UndefineDataEvent(ea))
 		return ida_idp.IDP_Hooks.ev_undefine(self, ea)
 
-	def	ev_newfile(self, fname):
-		
+	def	ev_newfile(self, fname):	
 		log("START")
 		pass_to_manager(StartIDAEvent())
 		shared.PAUSE_HOOK = not ida_auto.auto_is_ok()
 		return ida_idp.IDP_Hooks.ev_newfile(self, fname)
 
 	def ev_oldfile(self, fname):
-		
 		log("START")
 		pass_to_manager(StartIDAEvent())
 		shared.PAUSE_HOOK = not ida_auto.auto_is_ok()
@@ -290,13 +288,12 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 	def init(self):
 		msg("[IReal]: Init done\n")
 		msg("[IReal]: Waiting for auto analysing\n")
-		shared.COMMUNICATION_MANAGER_WINDOW_ID = struct.unpack(">I", os.urandom(4))[0]
-		if shared.INTEGRATOR_WINDOW_ID != -1: #TODO: start the communication manaager
-			shared.start_communication_manager()
+		constants.create_config_file()
 		if idc.GetIdbPath() and ida_auto.auto_is_ok():
 			shared.PAUSE_HOOK = False
 		else:
 			shared.PAUSE_HOOK = True
+	
 		self.idb_hook = LiveHook()
 		self.ui_hook = ClosingHook()
 		self.idp_hook = LiveHookIDP()
@@ -306,12 +303,14 @@ class hook_manager(idaapi.UI_Hooks, idaapi.plugin_t):
 		self.idp_hook.hook()
 		self.view_hook.hook()
 		self.hook()
+		
 		return idaapi.PLUGIN_KEEP
 
 	def term(self):
 		try:
 			communication_manager_window_handler = constants.get_window_handler_by_id(shared.COMMUNICATION_MANAGER_WINDOW_ID)
 			constants.send_data_to_window(communication_manager_window_handler, constants.KILL_COMMUNICATION_MANAGER_MESSAGE_ID, None)
+			time.sleep(1)
 		except Exception as e:
 			pass
 		
